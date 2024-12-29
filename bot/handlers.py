@@ -1,6 +1,7 @@
 from keybords import task_keyboard
 from utils import add_task, get_tasks
 from datetime import datetime, timedelta
+from threading import Timer
 
 # Бот инициализируется из main.py
 bot = None
@@ -38,18 +39,36 @@ def register_handlers(main_bot):
     @bot.message_handler(func=lambda msg: user_states.get(msg.chat.id, (None,))[0] == STATE_WAITING_FOR_TIME)
     def task_time_handler(message):
         try:
-            delay = int(message.text) * 60
-            task_text = user_states[message.chat.id][1]
+            # Конвертация времени из текста
+            delay = int(message.text) * 60  # в секундах
+            task_text = user_states[message.chat.id][1]  # Текст задачи
+
+            # Расчет времени выполнения задачи
             task_time = datetime.now() + timedelta(seconds=delay)
-            add_task(message.chat.id, task_text, task_time)
+            add_task(message.chat.id, task_text, task_time)  # Сохранение задачи в хранилище
+
+            # Сообщение о том, что задача добавлена
             bot.send_message(
                 message.chat.id,
                 f"✅ Задача добавлена! Я напомню тебе: \"{task_text}\" через {message.text} минут(ы).",
                 reply_markup=task_keyboard()
             )
-            user_states.pop(message.chat.id, None)  # Очистка состояния
+
+            # Планирование напоминания
+            Timer(delay, send_reminder, args=(message.chat.id, task_text)).start()
+
+            # Очистка состояния пользователя
+            user_states.pop(message.chat.id, None)
+
         except ValueError:
-            bot.send_message(message.chat.id, "❌ Ошибка: число времени некорректно. Попробуй снова.")
+            bot.send_message(
+                message.chat.id,
+                "❗️ Пожалуйста, введи количество минут числом. Попробуй еще раз."
+            )
+
+    def send_reminder(chat_id, task_text):
+        """Функция для отправки напоминания"""
+        bot.send_message(chat_id, f"🔔 Напоминаю о задаче: \"{task_text}\"")
 
     @bot.message_handler(func=lambda msg: msg.text == "📋 Список задач")
     def list_tasks_message(message):
