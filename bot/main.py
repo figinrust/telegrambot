@@ -1,13 +1,8 @@
 import telebot
+
+from bot.handlers import register_handler
 from config import BOT_TOKEN
-from handlers import register_handlers
-
-# Инициализация бота
 bot = telebot.TeleBot(BOT_TOKEN)
+register_handler(bot)
 
-# Регистрация обработчиков
-register_handlers(bot)
-
-# Запуск бота
-if __name__ == "__main__":
-    bot.polling(none_stop=True)
+bot.polling()

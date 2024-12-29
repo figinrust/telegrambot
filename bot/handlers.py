@@ -1,89 +1,87 @@
 from keybords import task_keyboard
-from utils import add_task, get_tasks
-from datetime import datetime, timedelta
-from threading import Timer
+from utils import state
 
-# Бот инициализируется из main.py
-bot = None
+# Создаём глобальный словарь для хранения задач
+user_tasks = {}
 
-# Хранение состояний пользователей
-user_states = {}
 
-# Определение состояний
-STATE_WAITING_FOR_TASK = "waiting_for_task"
-STATE_WAITING_FOR_TIME = "waiting_for_time"
-
-def register_handlers(main_bot):
-    global bot
-    bot = main_bot
-
+def register_handler(bot):
+    # Хендлер для команды /start
     @bot.message_handler(commands=["start"])
-    def start_message(message):
+    def send_start_message(message):
+        user_id = message.chat.id
+        state.add_state(user_id, "main")
+        current_state = state.get_current_state(user_id)
         bot.send_message(
-            message.chat.id,
-            "Привет! Я помогу тебе с напоминаниями. Выбери действие:",
-            reply_markup=task_keyboard()
+            user_id,
+            "Бот напоминалка\nВот мои команды:",
+            reply_markup=task_keyboard(current_state)
         )
 
-    @bot.message_handler(func=lambda msg: msg.text == "➕ Добавить задачу")
-    def add_task_message(message):
-        bot.send_message(message.chat.id, "Напиши текст задачи:")
-        user_states[message.chat.id] = STATE_WAITING_FOR_TASK
+    # Хендлер для кнопки "Добавить задачу"
+    @bot.message_handler(func=lambda msg: msg.text == "Добавить задачу")
+    def add_task(message):
+        user_id = message.chat.id
+        state.add_state(user_id, "add_task")
+        current_state = state.get_current_state(user_id)
+        bot.send_message(
+            user_id,
+            "Введите текст задачи:",
+            reply_markup=task_keyboard(current_state)
+        )
 
-    @bot.message_handler(func=lambda msg: user_states.get(msg.chat.id) == STATE_WAITING_FOR_TASK)
-    def task_text_handler(message):
-        task_text = message.text
-        bot.send_message(message.chat.id, "Через сколько минут напомнить? (Укажи число)")
-        user_states[message.chat.id] = (STATE_WAITING_FOR_TIME, task_text)
+    # Хендлер для обработки введённого текста задачи
+    @bot.message_handler(func=lambda msg: state.get_current_state(msg.chat.id) == "add_task")
+    def save_task(message):
+        user_id = message.chat.id
+        task_text = message.text  # Текст задачи из сообщения
 
-    @bot.message_handler(func=lambda msg: user_states.get(msg.chat.id, (None,))[0] == STATE_WAITING_FOR_TIME)
-    def task_time_handler(message):
-        try:
-            # Конвертация времени из текста
-            delay = int(message.text) * 60  # в секундах
-            task_text = user_states[message.chat.id][1]  # Текст задачи
+        if task_text:  # Проверяем, что текст непустой
+            # Добавляем задачу в глобальный словарь
+            if user_id not in user_tasks:
+                user_tasks[user_id] = []  # Создаём список задач для пользователя
+            user_tasks[user_id].append(task_text)  # Сохраняем задачу для пользователя
 
-            # Расчет времени выполнения задачи
-            task_time = datetime.now() + timedelta(seconds=delay)
-            add_task(message.chat.id, task_text, task_time)  # Сохранение задачи в хранилище
-
-            # Сообщение о том, что задача добавлена
+            # Возврат пользователя в главное меню
+            state.add_state(user_id, "main")
+            current_state = state.get_current_state(user_id)
             bot.send_message(
-                message.chat.id,
-                f"✅ Задача добавлена! Я напомню тебе: \"{task_text}\" через {message.text} минут(ы).",
-                reply_markup=task_keyboard()
+                user_id,
+                f"Задача \"{task_text}\" успешно добавлена!",
+                reply_markup=task_keyboard(current_state)
             )
-
-            # Планирование напоминания
-            Timer(delay, send_reminder, args=(message.chat.id, task_text)).start()
-
-            # Очистка состояния пользователя
-            user_states.pop(message.chat.id, None)
-
-        except ValueError:
-            bot.send_message(
-                message.chat.id,
-                "❗️ Пожалуйста, введи количество минут числом. Попробуй еще раз."
-            )
-
-    def send_reminder(chat_id, task_text):
-        """Функция для отправки напоминания"""
-        bot.send_message(chat_id, f"🔔 Напоминаю о задаче: \"{task_text}\"")
-
-    @bot.message_handler(func=lambda msg: msg.text == "📋 Список задач")
-    def list_tasks_message(message):
-        user_tasks = get_tasks(message.chat.id)
-        if user_tasks:
-            tasks_text = []
-            for task in user_tasks:
-                task_text, task_time = task
-                remaining_time = task_time - datetime.now()
-                if remaining_time.total_seconds() > 0:
-                    minutes, seconds = divmod(remaining_time.total_seconds(), 60)
-                    tasks_text.append(f"- {task_text} (осталось {int(minutes)} минут и {int(seconds)} секунд)")
-                else:
-                    tasks_text.append(f"- {task_text} (время истекло)")
-            tasks_message = "\n".join(tasks_text)
-            bot.send_message(message.chat.id, f"📋 Твои задачи:\n{tasks_message}")
         else:
-            bot.send_message(message.chat.id, "📭 У тебя нет задач.")
+            bot.send_message(
+                user_id,
+                "Текст задачи не может быть пустым. Пожалуйста, введите задачу:"
+            )
+
+    @bot.message_handler(func=lambda msg: msg.text == "Список задач")
+    def list_tasks(message):
+        user_id = message.chat.id
+        state.add_state(user_id, "list_tasks")
+        current_state = state.get_current_state(user_id)
+        if user_id in user_tasks and user_tasks[user_id]:
+            tasks = "\n".join([f"{i + 1}. {task}" for i, task in enumerate(user_tasks[user_id])])
+            bot.send_message(
+                user_id,
+                f"Ваши задачи:\n{tasks}",
+                reply_markup=task_keyboard(current_state)
+            )
+        else:
+            bot.send_message(
+                user_id,
+                "У вас пока нет задач.",
+                reply_markup=task_keyboard(current_state)
+            )
+
+    @bot.message_handler(func=lambda msg: msg.text == "Назад")
+    def back_main(message):
+        user_id = message.chat.id
+        state.add_state(user_id, "main")
+        current_state = state.get_current_state(user_id)
+        bot.send_message(
+            user_id,
+            "Бот напоминалка\nВот мои команды:",
+            reply_markup=task_keyboard(current_state)
+        )
