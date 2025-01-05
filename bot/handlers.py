@@ -28,7 +28,6 @@ def register_handler(bot):
             "Бот напоминалка\nВот мои команды:",
             reply_markup=task_keyboard(current_state)
         )
-        print(user_tasks)
 
     # Хендлер для кнопки "Добавить задачу"
     @bot.message_handler(func=lambda msg: msg.text == "Добавить задачу")
@@ -144,7 +143,6 @@ def register_handler(bot):
                 "Ваши задачи:\n" + "\n".join(tasks_info),
                 reply_markup=task_keyboard(current_state)
             )
-            print(tasks_info)
         else:
             bot.send_message(
                 user_id,
