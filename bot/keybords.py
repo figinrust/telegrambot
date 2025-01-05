@@ -10,5 +10,6 @@ def task_keyboard(state):
         keyboard.add("Список задач")
         keyboard.add("Назад")
     elif state == "list_tasks":
+        keyboard.add("Очистить задачи")
         keyboard.add("Назад")
     return keyboard
