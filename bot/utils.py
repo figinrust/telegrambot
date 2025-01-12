@@ -1,3 +1,16 @@
+import logging
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,  # Уровень логирования (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()   # Лог отображается в консоли
+    ]
+)
+
+logger = logging.getLogger(__name__)  # Создаём объект логгера
+
 class State:
     def __init__(self):
         self.user_states = {} # Словарь для хранения состояний
