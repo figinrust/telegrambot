@@ -10,22 +10,62 @@ user_tasks = {}
 
 # Регистрация хендлеров для бота
 def register_handler(bot):
+
+
     # Хендлер для команды /start
     @bot.message_handler(commands=["start"])
     def send_start_message(message):
         user_id = message.chat.id
-        state.add_state(user_id, "main")
+        state.add_state(user_id, "start")
         current_state = state.get_current_state(user_id)
 
-        logger.info(f"Пользователь {user_id} вызвал команду /start. Установлено состояние {current_state}.")
+        logger.info(f"Пользователь {user_id} вызвал команду /start. Установлено состояние {current_state}")
         bot.send_message(
             user_id,
             "Бот напоминалка\nВот мои команды:\n"
-            "/start - запуск меню\n"
+            "/start - перезапуск\n"
+            "/reset - сброс\n"
             "/add_task - добавление задачи\n"
             "/list - открыть список задачи\n"
             "/clear_task - удаление задач, время которых истекло",
         )
+        logger.info(f'Словарь состояний - {state.user_states}')
+        logger.info(f"Список задач {user_tasks}")
+
+    # Хендлер для команды /reset
+    @bot.message_handler(commands=["reset"])
+    def reset_list(message):
+        user_id = message.chat.id
+        try:
+            # Удаляем все задачи пользователя, если они существуют
+            if user_id in user_tasks:
+                user_tasks.pop(user_id)
+
+            # Очищаем состояния пользователя
+            if user_id in state.user_states:
+                state.user_states.pop(user_id)
+
+            state.add_state(user_id, "start")
+            current_state = state.get_current_state(user_id)
+
+            logger.info(f"Пользователь {user_id} вызвал команду /reset. Установлено состояние {current_state}. Словарь user_tasks очищен - {user_tasks}")
+            bot.send_message(user_id, "Сброс прошёл успешно")
+
+            bot.send_message(
+                user_id,
+                "Вот мои команды:\n"
+                "/start - перезапуск\n"
+                "/reset - сброс\n"
+                "/add_task - добавление задачи\n"
+                "/list - открыть список задачи\n"
+                "/clear_task - удаление задач, время которых истекло",
+            )
+        except ValueError as e:
+            logger.error(f"Ошибка сброса {str(e)} {user_id}")
+            bot.send_message(
+                user_id,
+                f"❌ Ошибка сброса."
+            )
 
 
     # Хендлер для кнопки "Добавить задачу"
@@ -97,10 +137,10 @@ def register_handler(bot):
                 f"⏳ Напоминание для задачи \"{task['text']}\" будет отправлено через {hours}ч {minutes}м {seconds}с."
             )
         except ValueError as e:
-            logger.error(f"Ошибка ввода времени от пользователя {user_id}: {e}")
+            logger.error(f"Ошибка ввода времени {str(e)} от пользователя {user_id}: {e}")
             bot.send_message(
                 user_id,
-                f"❌ Ошибка: {str(e)}. Введите время в формате ЧЧ:ММ:СС."
+                f"❌ Ошибка. Введите время в формате ЧЧ:ММ:СС."
             )
 
     # Функция для отправки напоминаний
