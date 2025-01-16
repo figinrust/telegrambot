@@ -8,6 +8,9 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 # Создаем глобальный словарь для хранения задач
 user_tasks = {}
 
+# Создаём глобальный словарь для хранения флагов завершения напоминаний
+user_timers = {}
+
 # Регистрация хендлеров для бота
 def register_handler(bot):
 
@@ -31,6 +34,7 @@ def register_handler(bot):
         )
         logger.info(f'Словарь состояний - {state.user_states}')
         logger.info(f"Список задач {user_tasks}")
+        logger.info((f"Список потоков {user_timers}"))
 
     # Хендлер для команды /reset
     @bot.message_handler(commands=["reset"])
@@ -40,6 +44,10 @@ def register_handler(bot):
             # Удаляем все задачи пользователя, если они существуют
             if user_id in user_tasks:
                 user_tasks.pop(user_id)
+
+            # Удаляем все флаги в user_timer
+            if user_id in user_timers:
+                user_timers.pop(user_id)
 
             # Очищаем состояния пользователя
             if user_id in state.user_states:
@@ -127,9 +135,14 @@ def register_handler(bot):
             task = user_tasks[user_id][-1]
             logger.info(f"{task} - последняя задача")
             task['reminder_time'] = datetime.now() + timedelta(seconds=delay)
+
+
+            # Подготовка флага завершения
+            stop_flag = threading.Event()
+            user_timers[user_id] = stop_flag
             logger.info(f"Задача \"{task['text']}\" от пользователя {user_id} запланирована через {delay} секунд.")
 
-            threading.Thread(target=send_task_reminder, args=(bot, user_id, task)).start()
+            threading.Thread(target=send_task_reminder, args=(bot, user_id, task, stop_flag)).start()
 
             state.add_state(user_id, "main")
             bot.send_message(
@@ -144,8 +157,10 @@ def register_handler(bot):
             )
 
     # Функция для отправки напоминаний
-    def send_task_reminder(bot, user_id, task):
+    def send_task_reminder(bot, user_id, task, stop_flag):
         delay = (task['reminder_time'] - datetime.now()).total_seconds()
+        if stop_flag.wait(timeout=delay):
+            return  # Были прекращены
         if delay <= 0:
             logger.warning(f"Напоминание для задачи \"{task['text']}\" пользователя {user_id} просрочено.")
             return
@@ -256,6 +271,8 @@ def register_handler(bot):
                 task_index = int(call.data.split("_")[-1])  # Получаем индекс из callback_data
                 if 0 <= task_index < len(user_tasks[user_id]):
                     deleted_task = user_tasks[user_id].pop(task_index)
+                    user_timers[user_id].set()
+                    logger.info("Таймер остановлен")
                     bot.send_message(user_id, f"Задача {task_index + 1} '{deleted_task['text']}' удалена.")
                     bot.answer_callback_query(call.id, text=f"Задача {task_index + 1} удалена.")
                     logger.info(f"Задача {task_index + 1} '{deleted_task['text']}' удалена.")
